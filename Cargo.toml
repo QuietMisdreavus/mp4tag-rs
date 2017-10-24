@@ -2,6 +2,7 @@
 name = "mp4tag"
 version = "0.1.0"
 authors = ["QuietMisdreavus <grey@quietmisdreavus.net>"]
+license = "MPL-2.0"
 
 [dependencies]
 byteorder = "1.1.0"
