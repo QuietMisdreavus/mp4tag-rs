@@ -150,3 +150,96 @@ pub fn find_atom<'a, I: IntoIterator<Item=S>, S: AsRef<[u8]>>(atoms: &'a [Atom],
 
     inner(atoms, first, iter)
 }
+
+#[derive(Debug)]
+pub struct AtomData {
+    pub flags: i32,
+    pub data: Vec<u8>,
+}
+
+fn load_atom_data<F: Read + Seek>(file: &mut F, atom: &Atom) -> io::Result<Vec<AtomData>> {
+    file.seek(SeekFrom::Start(atom.start + 8))?;
+
+    let mut ret = vec![];
+
+    let mut pos = 0;
+    let mut buf = vec![0u8; atom.len as usize];
+    file.read_exact(&mut buf)?;
+
+    while pos + 16 <= buf.len() {
+        let len = BigEndian::read_u32(&buf[pos..]) as usize;
+        if len < 12 {
+            //atom too short
+            //TODO: logging
+            break;
+        }
+
+        let name = &buf[pos+4..pos+8];
+        let flags = BigEndian::read_i32(&buf[pos+8..]);
+
+        //TODO: freeform atoms
+
+        if name != b"data" {
+            //unexpected atom
+            //TODO: logging
+            break;
+        }
+        ret.push(AtomData { flags, data: buf[pos+16..pos+len].to_vec() });
+
+        pos += len;
+    }
+
+    Ok(ret)
+}
+
+fn load_atom_string<F: Read + Seek>(file: &mut F, atom: &Atom) -> io::Result<Option<String>> {
+    let mut ret = String::new();
+
+    for data in load_atom_data(file, atom)? {
+        if let Ok(text) = String::from_utf8(data.data) {
+            if !ret.is_empty() {
+                ret.push(' ');
+            }
+            ret.push_str(&text);
+        }
+        //TODO: ...and what if it's not utf8?
+    }
+
+    if !ret.is_empty() {
+        Ok(Some(ret))
+    } else {
+        Ok(None)
+    }
+}
+
+pub fn date<F: Read + Seek>(file: &mut F, atoms: &[Atom]) -> io::Result<Option<String>> {
+    if let Some(atom) = find_atom(atoms, &[b"moov", b"udta", b"meta", b"ilst", b"\xA9day"]) {
+        load_atom_string(file, atom)
+    } else {
+        Ok(None)
+    }
+}
+
+pub fn title<F: Read + Seek>(file: &mut F, atoms: &[Atom]) -> io::Result<Option<String>> {
+    if let Some(atom) = find_atom(atoms, &[b"moov", b"udta", b"meta", b"ilst", b"\xA9nam"]) {
+        load_atom_string(file, atom)
+    } else {
+        Ok(None)
+    }
+}
+
+pub fn artist<F: Read + Seek>(file: &mut F, atoms: &[Atom]) -> io::Result<Option<String>> {
+    if let Some(atom) = find_atom(atoms, &[b"moov", b"udta", b"meta", b"ilst", b"\xA9ART"]) {
+        load_atom_string(file, atom)
+    } else {
+        Ok(None)
+    }
+}
+
+pub fn album<F: Read + Seek>(file: &mut F, atoms: &[Atom]) -> io::Result<Option<String>> {
+    if let Some(atom) = find_atom(atoms, &[b"moov", b"udta", b"meta", b"ilst", b"\xA9alb"]) {
+        load_atom_string(file, atom)
+    } else {
+        Ok(None)
+    }
+}
