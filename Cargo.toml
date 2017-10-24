@@ -1,0 +1,8 @@
+[package]
+name = "mp4tag"
+version = "0.1.0"
+authors = ["QuietMisdreavus <grey@quietmisdreavus.net>"]
+
+[dependencies]
+byteorder = "1.1.0"
+smallstring = "0.1.2"
