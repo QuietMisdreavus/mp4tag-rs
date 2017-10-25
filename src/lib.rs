@@ -192,15 +192,14 @@ fn load_atom_data<F: Read + Seek>(file: &mut F, atom: &Atom) -> io::Result<Vec<A
     Ok(ret)
 }
 
-fn load_atom_string<F: Read + Seek>(file: &mut F, atom: &Atom) -> io::Result<Option<String>> {
-    let mut ret = String::new();
+fn load_atom_string_list<F: Read + Seek>(file: &mut F, atom: &Atom)
+    -> io::Result<Option<Vec<String>>>
+{
+    let mut ret = vec![];
 
     for data in load_atom_data(file, atom)? {
         if let Ok(text) = String::from_utf8(data.data) {
-            if !ret.is_empty() {
-                ret.push(' ');
-            }
-            ret.push_str(&text);
+            ret.push(text);
         }
         //TODO: ...and what if it's not utf8?
     }
@@ -210,6 +209,10 @@ fn load_atom_string<F: Read + Seek>(file: &mut F, atom: &Atom) -> io::Result<Opt
     } else {
         Ok(None)
     }
+}
+
+fn load_atom_string<F: Read + Seek>(file: &mut F, atom: &Atom) -> io::Result<Option<String>> {
+    Ok(load_atom_string_list(file, atom)?.map(|l| l.join(" ")))
 }
 
 pub fn date<F: Read + Seek>(file: &mut F, atoms: &[Atom]) -> io::Result<Option<String>> {
