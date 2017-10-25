@@ -69,7 +69,7 @@ fn read_atom<F: Read + Seek>(file: &mut F) -> io::Result<Option<Atom>> {
         Err(e) => return Err(e),
     }
 
-    ret.len = BigEndian::read_u32(&header[..4]) as u64;
+    ret.len = u64::from(BigEndian::read_u32(&header[..4]));
 
     if ret.len == 0 {
         // The last atom which extends to the end of the file
@@ -121,17 +121,17 @@ pub fn read_atoms<F: Read + Seek>(file: &mut F) -> io::Result<Vec<Atom>> {
     Ok(ret)
 }
 
-pub fn find_atom<'a, I: IntoIterator<Item=S>, S: AsRef<[u8]>>(atoms: &'a [Atom], path: I)
-    -> Option<&'a Atom>
+pub fn find_atom<I: IntoIterator<Item=S>, S: AsRef<[u8]>>(atoms: &[Atom], path: I)
+    -> Option<&Atom>
 {
-    fn inner<'a, I: IntoIterator<Item=S>, S: AsRef<[u8]>>(atoms: &'a [Atom],
-                                                          needle: Option<S>,
-                                                          path_suffix: I)
-        -> Option<&'a Atom>
+    fn inner<I: IntoIterator<Item=S>, S: AsRef<[u8]>>(atoms: &[Atom],
+                                                      needle: Option<S>,
+                                                      path_suffix: I)
+        -> Option<&Atom>
     {
         if let Some(name) = needle {
             for a in atoms {
-                if &a.name == name.as_ref() {
+                if a.name == *name.as_ref() {
                     let mut iter = path_suffix.into_iter();
                     let next = iter.next();
                     if next.is_none() {
