@@ -215,39 +215,7 @@ fn load_atom_string<F: Read + Seek>(file: &mut F, atom: &Atom) -> io::Result<Opt
     Ok(load_atom_string_list(file, atom)?.map(|l| l.join(" ")))
 }
 
-fn date<F: Read + Seek>(file: &mut F, atoms: &[Atom]) -> io::Result<Option<String>> {
-    if let Some(atom) = find_atom(atoms, &[b"moov", b"udta", b"meta", b"ilst", b"\xA9day"]) {
-        load_atom_string(file, atom)
-    } else {
-        Ok(None)
-    }
-}
-
-fn title<F: Read + Seek>(file: &mut F, atoms: &[Atom]) -> io::Result<Option<String>> {
-    if let Some(atom) = find_atom(atoms, &[b"moov", b"udta", b"meta", b"ilst", b"\xA9nam"]) {
-        load_atom_string(file, atom)
-    } else {
-        Ok(None)
-    }
-}
-
-fn artist<F: Read + Seek>(file: &mut F, atoms: &[Atom]) -> io::Result<Option<String>> {
-    if let Some(atom) = find_atom(atoms, &[b"moov", b"udta", b"meta", b"ilst", b"\xA9ART"]) {
-        load_atom_string(file, atom)
-    } else {
-        Ok(None)
-    }
-}
-
-fn album<F: Read + Seek>(file: &mut F, atoms: &[Atom]) -> io::Result<Option<String>> {
-    if let Some(atom) = find_atom(atoms, &[b"moov", b"udta", b"meta", b"ilst", b"\xA9alb"]) {
-        load_atom_string(file, atom)
-    } else {
-        Ok(None)
-    }
-}
-
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct Tags {
     pub artist: Option<String>,
     pub album: Option<String>,
@@ -259,11 +227,20 @@ impl Tags {
     pub fn load<F: Read + Seek>(src: &mut F) -> io::Result<Tags> {
         let atoms = read_atoms(src)?;
 
-        Ok(Tags {
-            artist: artist(src, &atoms)?,
-            album: album(src, &atoms)?,
-            title: title(src, &atoms)?,
-            date: date(src, &atoms)?,
-        })
+        let mut ret = Tags::default();
+
+        if let Some(ilst) = find_atom(&atoms, &["moov", "udta", "meta", "ilst"]) {
+            for atom in &ilst.children {
+                match &atom.name {
+                    b"\xA9ART" => ret.artist = load_atom_string(src, atom)?,
+                    b"\xA9alb" => ret.album = load_atom_string(src, atom)?,
+                    b"\xA9nam" => ret.title = load_atom_string(src, atom)?,
+                    b"\xA9day" => ret.date = load_atom_string(src, atom)?,
+                    _ => {} //TODO: unused atoms?
+                }
+            }
+        }
+
+        Ok(ret)
     }
 }
