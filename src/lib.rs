@@ -215,7 +215,7 @@ fn load_atom_string<F: Read + Seek>(file: &mut F, atom: &Atom) -> io::Result<Opt
     Ok(load_atom_string_list(file, atom)?.map(|l| l.join(" ")))
 }
 
-pub fn date<F: Read + Seek>(file: &mut F, atoms: &[Atom]) -> io::Result<Option<String>> {
+fn date<F: Read + Seek>(file: &mut F, atoms: &[Atom]) -> io::Result<Option<String>> {
     if let Some(atom) = find_atom(atoms, &[b"moov", b"udta", b"meta", b"ilst", b"\xA9day"]) {
         load_atom_string(file, atom)
     } else {
@@ -223,7 +223,7 @@ pub fn date<F: Read + Seek>(file: &mut F, atoms: &[Atom]) -> io::Result<Option<S
     }
 }
 
-pub fn title<F: Read + Seek>(file: &mut F, atoms: &[Atom]) -> io::Result<Option<String>> {
+fn title<F: Read + Seek>(file: &mut F, atoms: &[Atom]) -> io::Result<Option<String>> {
     if let Some(atom) = find_atom(atoms, &[b"moov", b"udta", b"meta", b"ilst", b"\xA9nam"]) {
         load_atom_string(file, atom)
     } else {
@@ -231,7 +231,7 @@ pub fn title<F: Read + Seek>(file: &mut F, atoms: &[Atom]) -> io::Result<Option<
     }
 }
 
-pub fn artist<F: Read + Seek>(file: &mut F, atoms: &[Atom]) -> io::Result<Option<String>> {
+fn artist<F: Read + Seek>(file: &mut F, atoms: &[Atom]) -> io::Result<Option<String>> {
     if let Some(atom) = find_atom(atoms, &[b"moov", b"udta", b"meta", b"ilst", b"\xA9ART"]) {
         load_atom_string(file, atom)
     } else {
@@ -239,10 +239,31 @@ pub fn artist<F: Read + Seek>(file: &mut F, atoms: &[Atom]) -> io::Result<Option
     }
 }
 
-pub fn album<F: Read + Seek>(file: &mut F, atoms: &[Atom]) -> io::Result<Option<String>> {
+fn album<F: Read + Seek>(file: &mut F, atoms: &[Atom]) -> io::Result<Option<String>> {
     if let Some(atom) = find_atom(atoms, &[b"moov", b"udta", b"meta", b"ilst", b"\xA9alb"]) {
         load_atom_string(file, atom)
     } else {
         Ok(None)
+    }
+}
+
+#[derive(Debug)]
+pub struct Tags {
+    pub artist: Option<String>,
+    pub album: Option<String>,
+    pub title: Option<String>,
+    pub date: Option<String>,
+}
+
+impl Tags {
+    pub fn load<F: Read + Seek>(src: &mut F) -> io::Result<Tags> {
+        let atoms = read_atoms(src)?;
+
+        Ok(Tags {
+            artist: artist(src, &atoms)?,
+            album: album(src, &atoms)?,
+            title: title(src, &atoms)?,
+            date: date(src, &atoms)?,
+        })
     }
 }
