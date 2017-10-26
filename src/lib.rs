@@ -211,8 +211,18 @@ fn load_atom_string_list<F: Read + Seek>(file: &mut F, atom: &Atom)
     }
 }
 
-fn load_atom_string<F: Read + Seek>(file: &mut F, atom: &Atom) -> io::Result<Option<String>> {
-    Ok(load_atom_string_list(file, atom)?.map(|l| l.join(" ")))
+fn load_atom_string<F: Read + Seek>(file: &mut F, atom: &Atom, sep: &str)
+    -> io::Result<Option<String>>
+{
+    Ok(load_atom_string_list(file, atom)?.map(|l| l.join(sep)))
+}
+
+fn load_atom_int_pair<F: Read + Seek>(file: &mut F, atom: &Atom)
+    -> io::Result<Option<(i16, i16)>>
+{
+    Ok(load_atom_data(file, atom)?.first().map(|data| {
+        (BigEndian::read_i16(&data.data[2..]), BigEndian::read_i16(&data.data[4..]))
+    }))
 }
 
 #[derive(Debug, Default)]
@@ -221,6 +231,8 @@ pub struct Tags {
     pub album: Option<String>,
     pub title: Option<String>,
     pub date: Option<String>,
+    pub track: Option<(i16, i16)>,
+    pub disc: Option<(i16, i16)>,
 }
 
 impl Tags {
@@ -232,10 +244,12 @@ impl Tags {
         if let Some(ilst) = find_atom(&atoms, &["moov", "udta", "meta", "ilst"]) {
             for atom in &ilst.children {
                 match &atom.name {
-                    b"\xA9ART" => ret.artist = load_atom_string(src, atom)?,
-                    b"\xA9alb" => ret.album = load_atom_string(src, atom)?,
-                    b"\xA9nam" => ret.title = load_atom_string(src, atom)?,
-                    b"\xA9day" => ret.date = load_atom_string(src, atom)?,
+                    b"\xA9ART" => ret.artist = load_atom_string(src, atom, ", ")?,
+                    b"\xA9alb" => ret.album = load_atom_string(src, atom, ", ")?,
+                    b"\xA9nam" => ret.title = load_atom_string(src, atom, ", ")?,
+                    b"\xA9day" => ret.date = load_atom_string(src, atom, " ")?,
+                    b"trkn" => ret.track = load_atom_int_pair(src, atom)?,
+                    b"disk" => ret.disc = load_atom_int_pair(src, atom)?,
                     _ => {} //TODO: unused atoms?
                 }
             }
