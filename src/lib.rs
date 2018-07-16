@@ -26,33 +26,37 @@ pub struct Atom {
 
 impl fmt::Debug for Atom {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        let name: String = if let Ok(name) = from_utf8(&self.name[..]) {
-            name.to_string()
-        } else {
-            let mut name = String::new();
+        struct Name([u8; 4]);
 
-            let slice = if self.name[0] == 0o251 {
-                name.push('©');
-                &self.name[1..]
-            } else {
-                &self.name[..]
-            };
+        impl fmt::Debug for Name {
+            fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+                if let Ok(name) = from_utf8(&self.0[..]) {
+                    f.write_str(name)?;
+                } else {
+                    let slice = if self.0[0] == 0o251 {
+                        f.write_str("©")?;
+                        &self.0[1..]
+                    } else {
+                        &self.0[..]
+                    };
 
-            if let Ok(suffix) = from_utf8(slice) {
-                name.push_str(suffix);
-            } else {
-                for &byte in slice {
-                    name.push_str(&format!("\\x{:x}", byte));
+                    if let Ok(suffix) = from_utf8(slice) {
+                        f.write_str(suffix)?;
+                    } else {
+                        for &byte in slice {
+                            f.write_str(&format!("\\x{:x}", byte))?;
+                        }
+                    }
                 }
-            }
 
-            name
-        };
+                Ok(())
+            }
+        }
 
         f.debug_struct("Atom")
             .field("start", &self.start)
             .field("len", &self.len)
-            .field("name", &name)
+            .field("name", &Name(self.name))
             .field("children", &self.children)
             .finish()
     }
