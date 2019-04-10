@@ -10,17 +10,26 @@ use std::fmt;
 use std::io::{self, Read, Seek, SeekFrom, ErrorKind, Error};
 use std::str::from_utf8;
 
+/// The list of known atoms which can contain others.
 const CONTAINER_ATOMS: [&'static [u8; 4]; 11] = [
     b"moov", b"udta", b"mdia", b"meta", b"ilst",
     b"stbl", b"minf", b"moof", b"traf", b"trak",
     b"stsd"
 ];
 
+/// The basic unit of MP4 data. This is a lightweight handle that only contains seek positions of
+/// data within a file.
 #[derive(Default)]
 pub struct Atom {
+    /// The byte position in the parent file where this atom begins.
     pub start: u64,
+    /// The number of bytes used by this atom. By seeking to `atom.start + atom.len`, you will
+    /// reach the start of the next atom (or the end of the file).
     pub len: u64,
+    /// The name of the atom. Usually this is four characters of ASCII text, but sometimes the byte
+    /// `0xA9` is used for the first character, often rendered as the copyright symbol `©`.
     pub name: [u8; 4],
+    /// The children of this atom, if any.
     pub children: Vec<Atom>,
 }
 
@@ -62,6 +71,8 @@ impl fmt::Debug for Atom {
     }
 }
 
+/// Attempt to read an atom from the current position in the given buffer. If the end of the file
+/// is reached, `Ok(None)` is returned.
 fn read_atom<F: Read + Seek>(file: &mut F) -> io::Result<Option<Atom>> {
     let mut ret = Atom::default();
     ret.start = file.seek(SeekFrom::Current(0))?;
@@ -110,6 +121,7 @@ fn read_atom<F: Read + Seek>(file: &mut F) -> io::Result<Option<Atom>> {
     Ok(Some(ret))
 }
 
+/// Attempt to read all the atoms from the given buffer.
 pub fn read_atoms<F: Read + Seek>(file: &mut F) -> io::Result<Vec<Atom>> {
     let end = file.seek(SeekFrom::End(0))?;
     file.seek(SeekFrom::Start(0))?;
@@ -125,6 +137,7 @@ pub fn read_atoms<F: Read + Seek>(file: &mut F) -> io::Result<Vec<Atom>> {
     Ok(ret)
 }
 
+/// Given a list of previously-loaded `Atom`s, look up the atom at the given path.
 pub fn find_atom<I: IntoIterator<Item=S>, S: AsRef<[u8]>>(atoms: &[Atom], path: I)
     -> Option<&Atom>
 {
@@ -155,12 +168,18 @@ pub fn find_atom<I: IntoIterator<Item=S>, S: AsRef<[u8]>>(atoms: &[Atom], path: 
     inner(atoms, first, iter)
 }
 
+/// The loaded data corresponding to an `Atom`.
 #[derive(Debug)]
 pub struct AtomData {
     pub flags: i32,
     pub data: Vec<u8>,
 }
 
+/// Loads the given `Atom`'s data from the given buffer.
+///
+/// An atom that contains data will have a child `data` atom inside it. Fields that can contain
+/// multiple values instead contain a sequence of these `data` atoms, represented here as the
+/// `Vec<AtomData>` being returned.
 fn load_atom_data<F: Read + Seek>(file: &mut F, atom: &Atom) -> io::Result<Vec<AtomData>> {
     file.seek(SeekFrom::Start(atom.start + 8))?;
 
@@ -196,6 +215,7 @@ fn load_atom_data<F: Read + Seek>(file: &mut F, atom: &Atom) -> io::Result<Vec<A
     Ok(ret)
 }
 
+/// Loads the given `Atom` from the given buffer as a list of strings.
 fn load_atom_string_list<F: Read + Seek>(file: &mut F, atom: &Atom)
     -> io::Result<Option<Vec<String>>>
 {
@@ -215,12 +235,15 @@ fn load_atom_string_list<F: Read + Seek>(file: &mut F, atom: &Atom)
     }
 }
 
+/// Loads the given `Atom` from the given buffer as a string by first calling
+/// `load_atom_string_list` and joining the strings together with the given separator.
 fn load_atom_string<F: Read + Seek>(file: &mut F, atom: &Atom, sep: &str)
     -> io::Result<Option<String>>
 {
     Ok(load_atom_string_list(file, atom)?.map(|l| l.join(sep)))
 }
 
+/// Loads the given `Atom` from the given buffer as two `i16`s.
 fn load_atom_int_pair<F: Read + Seek>(file: &mut F, atom: &Atom)
     -> io::Result<Option<(i16, i16)>>
 {
@@ -235,11 +258,14 @@ pub struct Tags {
     pub album: Option<String>,
     pub title: Option<String>,
     pub date: Option<String>,
+    /// `(current_track, total_track_count)`
     pub track: Option<(i16, i16)>,
+    /// `(current_disc, total_disc_count)`
     pub disc: Option<(i16, i16)>,
 }
 
 impl Tags {
+    /// Loads the `Tags` from the given buffer.
     pub fn load<F: Read + Seek>(src: &mut F) -> io::Result<Tags> {
         let atoms = read_atoms(src)?;
 
